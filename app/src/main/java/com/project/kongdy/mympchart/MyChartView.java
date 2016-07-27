@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Point;
 import android.os.Build;
 import android.text.TextPaint;
 import android.util.AttributeSet;
@@ -15,6 +16,7 @@ import android.util.TypedValue;
 import android.view.View;
 
 import com.google.gson.annotations.SerializedName;
+
 
 /**
  * @author kongdy
@@ -37,6 +39,8 @@ public class MyChartView extends View {
     private boolean XAxisNet;
     private boolean YAxisNet;
     private boolean leftBottomCornerShow = false;
+    private boolean showXAxisFirst;
+    private boolean showYAxisFirst;
 
     private int[] XAxisColors;
     private int[] YAxisColors;
@@ -47,18 +51,27 @@ public class MyChartView extends View {
     private float XLabelTextSize = -1;
     private float YLabelTextSize = -1;
 
+    private float labelValueHeight;
+    private float labelvalueWidth;
+
     private int dataCount = -1;
 
     private int mWidth;
     private int mHeight;
     private int leftOffSet; // 左边距偏移
+    private int labelTop;
+    private int labelRight;
+    private int labelLeft;
+    private int labelBottom;
+    private int unitX;
+    private int unitY;
 
     private SparseArray<Float> XAxisLabel;
     private SparseArray<Float> YAxisLabel;
+    private SparseArray<Point> XPoints;
+    private SparseArray<Point> YPoints;
 
     private SparseArray<ChartData> datas;
-
-    private DATA_STYLE dataStyle = DATA_STYLE.FOLD_LINE;
 
     public MyChartView(Context context) {
         super(context);
@@ -85,17 +98,13 @@ public class MyChartView extends View {
 
         XAxisLabel = new SparseArray<>();
         YAxisLabel = new SparseArray<>();
+        XPoints = new SparseArray<>();
+        YPoints = new SparseArray<>();
+        datas = new SparseArray<>();
     }
 
     private void initProperty() {
-        switch (dataStyle) {
-            case FOLD_LINE:
-                break;
-            case COLUMNAR:
-                break;
-            case FILL_DOT:
-                break;
-        }
+        setLayerType(LAYER_TYPE_SOFTWARE,null);
         if (YAxisNet || XAxisNet) {
             chartNetPaint = new Paint();
             chartNetPaint.setStyle(Paint.Style.FILL_AND_STROKE);
@@ -141,7 +150,7 @@ public class MyChartView extends View {
         return labelsize;
     }
 
-    private void openHighQuality(Paint paint) {
+    public void openHighQuality(Paint paint) {
         if (paint == null) {
             return;
         }
@@ -159,8 +168,52 @@ public class MyChartView extends View {
         super.onSizeChanged(w, h, oldw, oldh);
         mWidth = w;
         mHeight = h;
-
         initProperty();
+        calculateCoords();
+    }
+
+
+    private void calculateCoords() {
+        XPoints.clear();
+        YPoints.clear();
+        unitX = (mWidth -YAxisWidth- leftOffSet - getPaddingLeft() - getPaddingRight()) / (XAxisLabel.size());
+        unitY = (int) ((mHeight -YLabelTextSize- XLabelTextSize - getPaddingTop() - getPaddingBottom()-XAxisWidth)
+                / (YAxisLabel.size()));
+        labelTop = (int) (mHeight-unitY*(YAxisLabel.size())- getPaddingBottom()-XLabelTextSize);
+        labelRight = mWidth-getPaddingRight();
+        labelLeft = leftOffSet + getPaddingLeft()+YAxisWidth;
+        labelBottom = (int) (mHeight-XLabelTextSize-getPaddingBottom());
+        // X
+        int XLeft = labelLeft;
+        for (int i = 0;i <= XAxisLabel.size();i++) {
+            Point point = new Point();
+            if(leftBottomCornerShow && i == 0) {
+                point.x = XLeft - leftOffSet;
+            } else {
+                point.x = XLeft;
+            }
+            point.y = labelBottom;
+            XLeft = XLeft+unitX;
+            XPoints.put(i,point);
+        }
+        // Y
+        int YBottom = labelBottom;
+        for (int i = 0;i <= YAxisLabel.size();i++){
+            Point point = new Point();
+            point.x = labelLeft;
+            point.y = YBottom;
+            YBottom = YBottom-unitY;
+            YPoints.put(i,point);
+        }
+        // data
+        if(datas != null){
+            int i = 0;
+            while(null != datas.get(i)) {
+                datas.get(i).initProperty(this);
+                datas.get(i).calculateCoords();
+                ++i;
+            }
+        }
     }
 
     @Override
@@ -168,67 +221,62 @@ public class MyChartView extends View {
         super.onDraw(canvas);
         canvas.saveLayer(0, 0, getMeasuredWidth(), getMeasuredHeight(), defaultPaint, Canvas.ALL_SAVE_FLAG);
 
-        int unitX = (mWidth -YAxisWidth- leftOffSet - getPaddingLeft() - getPaddingRight()) / (XAxisLabel.size()+1);
-        int unitY = (int) ((mHeight -YLabelTextSize- XLabelTextSize - getPaddingTop() - getPaddingBottom()-XAxisWidth)
-                / (YAxisLabel.size()+1));
-        final int labelTop = (int) (mHeight-unitY*(YAxisLabel.size()+1)- getPaddingBottom()-XLabelTextSize);
-        final int labelRight = mWidth-getPaddingRight();
-        final int labelLeft = leftOffSet + getPaddingLeft()+YAxisWidth;
-
+        // draw X
         final int[] XColors = getXAxisColors();
-        int Xleft = labelLeft;
-        int Xtop = (int) (mHeight - XLabelTextSize - getPaddingBottom());
-        for (int i = 0; i < XAxisLabel.size(); i++) {
-            int color;
-            if (i >= XColors.length) {
-                color = XColors[XColors.length - 1];
-            } else {
-                color = XColors[i];
+        for (int i = 0;i < XPoints.size()-1;i++){
+            XAxisPaint.setColor(getColor(i,XColors));
+            canvas.drawLine(XPoints.get(i).x, XPoints.get(i).y, XPoints.get(i+1).x, XPoints.get(i+1).y, XAxisPaint);
+            if(showXAxisFirst || i > 0) {
+                canvas.drawText(XAxisLabel.get(i) + "", XPoints.get(i).x,  XPoints.get(i).y+XLabelTextSize, XAxisMarkPaint);
             }
-            XAxisPaint.setColor(color);
-            if(i == 0 && leftBottomCornerShow) {
-                canvas.drawLine(Xleft-leftOffSet, Xtop, Xleft + unitX, Xtop, XAxisPaint);
-            } else {
-                canvas.drawLine(Xleft, Xtop, Xleft + unitX, Xtop, XAxisPaint);
-            }
-            Xleft = Xleft + unitX;
-            canvas.drawText(XAxisLabel.get(i) + "", Xleft, Xtop+XLabelTextSize, XAxisMarkPaint);
-            if(XAxisNet) {
-                netPath.reset();
-                netPath.moveTo(Xleft,Xtop);
-                netPath.lineTo(Xleft,labelTop);
-                canvas.drawPath(netPath,chartNetPaint);
+            if(i != 0 && i != XPoints.size()-1) {
+                if(XAxisNet) {
+                    netPath.reset();
+                    netPath.moveTo(XPoints.get(i).x,XPoints.get(i).y);
+                    netPath.lineTo(XPoints.get(i).x,labelTop);
+                    canvas.drawPath(netPath,chartNetPaint);
+                }
             }
         }
-        XAxisPaint.setColor(XColors[XColors.length - 1]);
-        canvas.drawLine(Xleft, Xtop, Xleft + unitX, Xtop, XAxisPaint);
 
+        // drawY
         final int[] YColors = getYAxisColors();
-        int Ytop = (int) (mHeight - XLabelTextSize - getPaddingBottom());
-        for (int i = 0; i < YAxisLabel.size(); i++) {
-            int color;
-            if (i >= YColors.length) {
-                color = YColors[YColors.length - 1];
-            } else {
-                color = YColors[i];
+        for (int i = 0;i < YPoints.size()-1;i++){
+            YAxisPaint.setColor(getColor(i,YColors));
+            canvas.drawLine(YPoints.get(i).x,YPoints.get(i).y,YPoints.get(i+1).x,YPoints.get(i+1).y,YAxisPaint);
+            if(showYAxisFirst || i > 0) {
+                canvas.drawText(YAxisLabel.get(i) + "", YPoints.get(i).x-(YAxisWidth+leftOffSet)/2, YPoints.get(i).y, YAxisMarkPaint);
             }
-            YAxisPaint.setColor(color);
-            canvas.drawLine(labelLeft, Ytop, labelLeft, Ytop - unitY, YAxisPaint);
-            Ytop = Ytop - unitY;
-            canvas.drawText(YAxisLabel.get(i) + "", labelLeft-(YAxisWidth+leftOffSet)/2, Ytop, YAxisMarkPaint);
-            if(YAxisNet) {
-                netPath.reset();
-                netPath.moveTo(labelLeft,Ytop);
-                netPath.lineTo(labelRight,Ytop);
-                canvas.drawPath(netPath,chartNetPaint);
+            if(i != 0 && i != YPoints.size()-1) {
+                if(YAxisNet) {
+                    netPath.reset();
+                    netPath.moveTo(labelLeft,YPoints.get(i).y);
+                    netPath.lineTo(labelRight,YPoints.get(i).y);
+                    canvas.drawPath(netPath,chartNetPaint);
+                }
             }
         }
-        YAxisPaint.setColor(YColors[YColors.length - 1]);
-        canvas.drawLine(labelLeft, Ytop, labelLeft, Ytop - unitY, YAxisPaint);
+
+        // draw data
+        if(datas != null){
+            int i = 0;
+            while(null != datas.get(i)) {
+                datas.get(i).initProperty(this);
+                datas.get(i).drawSelf(canvas);
+                ++i;
+            }
+        }
 
         canvas.restore();
     }
 
+    private int getColor(int i ,int[] colors) {
+        if (i >= colors.length) {
+           return colors[colors.length - 1];
+        } else {
+            return colors[i];
+        }
+    }
 
     public boolean isHighQuality() {
         return isHighQuality;
@@ -290,20 +338,12 @@ public class MyChartView extends View {
         this.YAxisWidth = YAxisWidth;
     }
 
-    public DATA_STYLE getDataStyle() {
-        return dataStyle;
-    }
-
-    public void setDataStyle(DATA_STYLE dataStyle) {
-        this.dataStyle = dataStyle;
-    }
-
     /**
-     * @param start 开始数字
      * @param end   最终数字
      * @param step  步长
      */
-    public void setXAxisLabel(int start, int end, int step) {
+    public void setXAxisLabel(int end, int step) {
+        int start = 0;
         if (start > end) {
             return;
         }
@@ -318,14 +358,15 @@ public class MyChartView extends View {
             tempCursor = tempCursor + step;
             ++i;
         }
+        labelvalueWidth = XAxisLabel.valueAt(XAxisLabel.size()-1)-start;
     }
 
     /**
-     * @param start 开始数字
      * @param end   最终数字
      * @param step  步长
      */
-    public void setYAxisLabel(float start, float end, float step) {
+    public void setYAxisLabel(float end, float step) {
+        float start = 0;
         if (start > end) {
             return;
         }
@@ -340,6 +381,7 @@ public class MyChartView extends View {
             tempCursor = tempCursor + step;
             ++i;
         }
+        labelValueHeight = YAxisLabel.valueAt(YAxisLabel.size()-1)-start;
     }
 
     public boolean isYAxisNet() {
@@ -360,6 +402,15 @@ public class MyChartView extends View {
 
     public void addChartData(ChartData chartData) {
         datas.put(++dataCount, chartData);
+    }
+
+    public void remmoveData(int i ) {
+        datas.removeAt(i);
+        dataCount--;
+    }
+
+    public SparseArray<ChartData> getChartDatas() {
+        return datas;
     }
 
     public SparseArray<ChartData> getDatas() {
@@ -386,6 +437,14 @@ public class MyChartView extends View {
         this.leftBottomCornerShow = leftBottomCornerShow;
     }
 
+    public void setShowYAxisFirst(boolean showYAxisFirst) {
+        this.showYAxisFirst = showYAxisFirst;
+    }
+
+    public void setShowXAxisFirst(boolean showXAxisFirst) {
+        this.showXAxisFirst = showXAxisFirst;
+    }
+
     private float getRawSize(int unit, float value) {
         DisplayMetrics displayMetrics = getContext().getResources().getDisplayMetrics();
         return TypedValue.applyDimension(unit, value, displayMetrics);
@@ -399,24 +458,138 @@ public class MyChartView extends View {
         }
     }
 
+    public int getLeftOffSet() {
+        return leftOffSet;
+    }
+
+    public int getLabelTop() {
+        return labelTop;
+    }
+
+    public int getLabelRight() {
+        return labelRight;
+    }
+
+    public int getLabelLeft() {
+        return labelLeft;
+    }
+
+    public int getLabelBottom() {
+        return labelBottom;
+    }
+
+    public SparseArray<Point> getXPoints() {
+        return XPoints;
+    }
+
+    public SparseArray<Point> getYPoints() {
+        return YPoints;
+    }
+
+    public SparseArray<Float> getYAxisLabel() {
+        return YAxisLabel;
+    }
+
+    public SparseArray<Float> getXAxisLabel() {
+        return XAxisLabel;
+    }
+
+    public boolean isLeftBottomCornerShow() {
+        return leftBottomCornerShow;
+    }
+
+    public int getmWidth() {
+        return mWidth;
+    }
+
+    public int getmHeight() {
+        return mHeight;
+    }
+
+    public float getLabelvalueWidth() {
+        return labelvalueWidth;
+    }
+
+    public float getLabelValueHeight() {
+        return labelValueHeight;
+    }
+
+    public int getUnitX() {
+        return unitX;
+    }
+
+    public int getUnitY() {
+        return unitY;
+    }
+
+
+
     /**
      * 数据呈现样式
      */
     public static enum DATA_STYLE {
         /**
-         * 折线图
+         * 折线图,直线
          */
         @SerializedName("1")
-        FOLD_LINE,
+        FOLD_LINE_BEVEL,
         /**
-         * 实心圆
+         * 折线图,曲线
          */
         @SerializedName("2")
-        FILL_DOT,
+        FOLD_LINE_ROUND,
+
         /**
          * 柱状图
          */
-        @SerializedName("3")
+        @SerializedName("4")
         COLUMNAR,
     }
+
+    /**
+     * 点的样式
+     */
+    public static enum POINT_STYLE {
+        /**
+         * 实心圆点
+         */
+        @SerializedName("1")
+        FILL_DOT,
+
+        /**
+         * 空心圆点，内实外空
+         */
+        @SerializedName("2")
+        HOLLOW_OUT_DOT,
+
+        /**
+         * 空心圆点，外空内实
+         */
+        @SerializedName("5")
+        HOLLOW_IN_DOT,
+
+        /**
+         * 方形点
+         */
+        @SerializedName("3")
+        SQUARE_DOT,
+
+        /**
+         * 不画圆点
+         */
+        @SerializedName("4")
+        NONE_DOT,
+    }
+
+    public interface MyMpChartDataProperty {
+        /**
+         * 颜色过滤器
+         * @param i
+         * @param XValue
+         * @param YValue
+         * @return
+         */
+        int getColorFilter(int i,float XValue,float YValue);
+    }
+
 }
