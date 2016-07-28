@@ -4,19 +4,24 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.DashPathEffect;
+import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Point;
+import android.graphics.Shader;
 import android.os.Build;
 import android.text.TextPaint;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
 import android.util.TypedValue;
+import android.view.SurfaceHolder;
 import android.view.View;
 
 import com.google.gson.annotations.SerializedName;
 
+import java.text.DecimalFormat;
 
 /**
  * @author kongdy
@@ -31,6 +36,7 @@ public class MyChartView extends View {
     private Paint chartNetPaint;
     private TextPaint XAxisMarkPaint;
     private TextPaint YAxisMarkPaint;
+    private Paint linkPaint;
 
     private Path netPath;
 
@@ -70,8 +76,28 @@ public class MyChartView extends View {
     private SparseArray<Float> YAxisLabel;
     private SparseArray<Point> XPoints;
     private SparseArray<Point> YPoints;
+    private String XFrontUnit;
+    private String YFrontUnit;
+    private String XBehindUnit;
+    private String YBehindUnit;
+    private int XRetainCount; // x轴保留小数
+    private int YRetainCount; // y轴保留小数
+    private StringBuilder XAxisFormat;
+    private StringBuilder YAxisFormat;
 
     private SparseArray<ChartData> datas;
+
+    private SurfaceHolder sfh;
+
+    private boolean refreshFlag;
+
+    /**
+     * 用于产生多个数据之间的连接条
+     */
+    private String link1;
+    private String link2;
+    ChartData chartDataLink1;
+    ChartData chartDataLink2;
 
     public MyChartView(Context context) {
         super(context);
@@ -93,6 +119,7 @@ public class MyChartView extends View {
         XAxisPaint = new Paint();
         YAxisPaint = new Paint();
         chartNetPaint = new Paint();
+        linkPaint = new Paint();
         XAxisMarkPaint = new TextPaint();
         YAxisMarkPaint = new TextPaint();
 
@@ -101,15 +128,15 @@ public class MyChartView extends View {
         XPoints = new SparseArray<>();
         YPoints = new SparseArray<>();
         datas = new SparseArray<>();
+
     }
 
     private void initProperty() {
-        setLayerType(LAYER_TYPE_SOFTWARE,null);
         if (YAxisNet || XAxisNet) {
             chartNetPaint = new Paint();
             chartNetPaint.setStyle(Paint.Style.FILL_AND_STROKE);
-            chartNetPaint.setPathEffect(new DashPathEffect(new float[]{4,4}, 1));
-            chartNetPaint.setStrokeWidth(getRawSize(TypedValue.COMPLEX_UNIT_DIP,0.5f));
+            chartNetPaint.setPathEffect(new DashPathEffect(new float[]{4, 4}, 1));
+            chartNetPaint.setStrokeWidth(getRawSize(TypedValue.COMPLEX_UNIT_DIP, 0.5f));
             netPath = new Path();
         }
         if (isHighQuality) {
@@ -119,6 +146,7 @@ public class MyChartView extends View {
             openHighQuality(chartNetPaint);
             openHighQuality(XAxisMarkPaint);
             openHighQuality(YAxisMarkPaint);
+            openHighQuality(linkPaint);
         }
         XAxisPaint.setStrokeWidth(getXAxisWidth());
         YAxisPaint.setStrokeWidth(getYAxisWidth());
@@ -135,7 +163,23 @@ public class MyChartView extends View {
 
         chartNetPaint.setColor(Color.GRAY);
 
-        leftOffSet = (int) YAxisMarkPaint.measureText(YAxisLabel.get(YAxisLabel.size()-1)+"");
+        linkPaint.setStrokeWidth(getRawSize(TypedValue.COMPLEX_UNIT_DIP, 2));
+
+        leftOffSet = (int) YAxisMarkPaint.measureText(YAxisLabel.get(YAxisLabel.size() - 1) + "");
+
+        // 计算位数
+        XAxisFormat = new StringBuilder("#");
+        if (XRetainCount > 0)
+            XAxisFormat.append(".");
+        for (int i = 0; i < XRetainCount; i++) {
+            XAxisFormat.append("#");
+        }
+        YAxisFormat = new StringBuilder("#");
+        if (YRetainCount > 0)
+            YAxisFormat.append(".");
+        for (int i = 0; i < YRetainCount; i++) {
+            YAxisFormat.append("#");
+        }
     }
 
     private float calculateLabelTextSize() {
@@ -173,106 +217,173 @@ public class MyChartView extends View {
     }
 
 
-    private void calculateCoords() {
-        XPoints.clear();
-        YPoints.clear();
-        unitX = (mWidth -YAxisWidth- leftOffSet - getPaddingLeft() - getPaddingRight()) / (XAxisLabel.size());
-        unitY = (int) ((mHeight -YLabelTextSize- XLabelTextSize - getPaddingTop() - getPaddingBottom()-XAxisWidth)
-                / (YAxisLabel.size()));
-        labelTop = (int) (mHeight-unitY*(YAxisLabel.size())- getPaddingBottom()-XLabelTextSize);
-        labelRight = mWidth-getPaddingRight();
-        labelLeft = leftOffSet + getPaddingLeft()+YAxisWidth;
-        labelBottom = (int) (mHeight-XLabelTextSize-getPaddingBottom());
-        // X
-        int XLeft = labelLeft;
-        for (int i = 0;i <= XAxisLabel.size();i++) {
-            Point point = new Point();
-            if(leftBottomCornerShow && i == 0) {
-                point.x = XLeft - leftOffSet;
-            } else {
-                point.x = XLeft;
-            }
-            point.y = labelBottom;
-            XLeft = XLeft+unitX;
-            XPoints.put(i,point);
-        }
-        // Y
-        int YBottom = labelBottom;
-        for (int i = 0;i <= YAxisLabel.size();i++){
-            Point point = new Point();
-            point.x = labelLeft;
-            point.y = YBottom;
-            YBottom = YBottom-unitY;
-            YPoints.put(i,point);
-        }
-        // data
-        if(datas != null){
+    /**
+     * 执行动画
+     */
+    private void animalOpen() {
+        if (datas != null) {
             int i = 0;
-            while(null != datas.get(i)) {
-                datas.get(i).initProperty(this);
-                datas.get(i).calculateCoords();
+            while (null != datas.get(i)) {
+                datas.get(i).startOpenFoldAnimal();
                 ++i;
             }
         }
     }
 
+
+    private void calculateCoords() {
+        XPoints.clear();
+        YPoints.clear();
+        unitX = (mWidth - YAxisWidth - leftOffSet - getPaddingLeft() - getPaddingRight()) / (XAxisLabel.size());
+        unitY = (int) ((mHeight - YLabelTextSize - XLabelTextSize - getPaddingTop() - getPaddingBottom() - XAxisWidth)
+                / (YAxisLabel.size()));
+        labelTop = (int) (mHeight - unitY * (YAxisLabel.size()) - getPaddingBottom() - XLabelTextSize);
+        labelRight = mWidth - getPaddingRight();
+        labelLeft = leftOffSet + getPaddingLeft() + YAxisWidth;
+        labelBottom = (int) (mHeight - XLabelTextSize - getPaddingBottom());
+        // X
+        int XLeft = labelLeft;
+        for (int i = 0; i <= XAxisLabel.size(); i++) {
+            Point point = new Point();
+            if (leftBottomCornerShow && i == 0) {
+                point.x = XLeft - leftOffSet;
+            } else {
+                point.x = XLeft;
+            }
+            point.y = labelBottom;
+            XLeft = XLeft + unitX;
+            XPoints.put(i, point);
+        }
+        // Y
+        int YBottom = labelBottom;
+        for (int i = 0; i <= YAxisLabel.size(); i++) {
+            Point point = new Point();
+            point.x = labelLeft;
+            point.y = YBottom;
+            YBottom = YBottom - unitY;
+            YPoints.put(i, point);
+        }
+        // data
+        if (datas != null) {
+            int i = 0;
+            while (null != datas.get(i)) {
+                datas.get(i).initProperty(this);
+                datas.get(i).calculateCoords();
+                ++i;
+            }
+        }
+
+        // check data link
+        initLink();
+        animalOpen();
+    }
+
+    private String getFormatLabel(StringBuilder format, float text) {
+        DecimalFormat df = new DecimalFormat(format.toString());
+        return df.format(text);
+    }
+
+    private void initLink() {
+        if (datas == null)
+            return;
+        if (TextUtils.isEmpty(link1) || TextUtils.isEmpty(link2))
+            return;
+        if (link1.equals(link2))
+            return;
+
+        chartDataLink1 = null;
+        chartDataLink2 = null;
+        for (int i = 0; i < datas.size(); i++) {
+            if (link1.equals(datas.get(i).name)) {
+                chartDataLink1 = datas.get(i);
+            } else if (link2.equals(datas.get(i).name)) {
+                chartDataLink2 = datas.get(i);
+            } else if (chartDataLink1 != null && chartDataLink2 != null) {
+                break;
+            }
+        }
+    }
+
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         canvas.saveLayer(0, 0, getMeasuredWidth(), getMeasuredHeight(), defaultPaint, Canvas.ALL_SAVE_FLAG);
-
         // draw X
         final int[] XColors = getXAxisColors();
-        for (int i = 0;i < XPoints.size()-1;i++){
-            XAxisPaint.setColor(getColor(i,XColors));
-            canvas.drawLine(XPoints.get(i).x, XPoints.get(i).y, XPoints.get(i+1).x, XPoints.get(i+1).y, XAxisPaint);
-            if(showXAxisFirst || i > 0) {
-                canvas.drawText(XAxisLabel.get(i) + "", XPoints.get(i).x,  XPoints.get(i).y+XLabelTextSize, XAxisMarkPaint);
+        for (int i = 0; i < XPoints.size() - 1; i++) {
+            XAxisPaint.setColor(getColor(i, XColors));
+            canvas.drawLine(XPoints.get(i).x, XPoints.get(i).y, XPoints.get(i + 1).x, XPoints.get(i + 1).y, XAxisPaint);
+            if (showXAxisFirst || i > 0) {
+                String text = XFrontUnit + getFormatLabel(XAxisFormat, XAxisLabel.get(i)) + XBehindUnit;
+                canvas.drawText(text, XPoints.get(i).x, XPoints.get(i).y + XLabelTextSize, XAxisMarkPaint);
             }
-            if(i != 0 && i != XPoints.size()-1) {
-                if(XAxisNet) {
+            if (i != 0 && i != XPoints.size() - 1) {
+                if (XAxisNet) {
                     netPath.reset();
-                    netPath.moveTo(XPoints.get(i).x,XPoints.get(i).y);
-                    netPath.lineTo(XPoints.get(i).x,labelTop);
-                    canvas.drawPath(netPath,chartNetPaint);
+                    netPath.moveTo(XPoints.get(i).x, XPoints.get(i).y);
+                    netPath.lineTo(XPoints.get(i).x, labelTop);
+                    canvas.drawPath(netPath, chartNetPaint);
                 }
             }
         }
 
         // drawY
         final int[] YColors = getYAxisColors();
-        for (int i = 0;i < YPoints.size()-1;i++){
-            YAxisPaint.setColor(getColor(i,YColors));
-            canvas.drawLine(YPoints.get(i).x,YPoints.get(i).y,YPoints.get(i+1).x,YPoints.get(i+1).y,YAxisPaint);
-            if(showYAxisFirst || i > 0) {
-                canvas.drawText(YAxisLabel.get(i) + "", YPoints.get(i).x-(YAxisWidth+leftOffSet)/2, YPoints.get(i).y, YAxisMarkPaint);
+        for (int i = 0; i < YPoints.size() - 1; i++) {
+            YAxisPaint.setColor(getColor(i, YColors));
+            canvas.drawLine(YPoints.get(i).x, YPoints.get(i).y, YPoints.get(i + 1).x, YPoints.get(i + 1).y, YAxisPaint);
+            if (showYAxisFirst || i > 0) {
+                String text = YFrontUnit + getFormatLabel(YAxisFormat, YAxisLabel.get(i)) + YBehindUnit;
+                canvas.drawText(text, YPoints.get(i).x - (YAxisWidth + leftOffSet) / 2, YPoints.get(i).y, YAxisMarkPaint);
             }
-            if(i != 0 && i != YPoints.size()-1) {
-                if(YAxisNet) {
+            if (i != 0 && i != YPoints.size() - 1) {
+                if (YAxisNet) {
                     netPath.reset();
-                    netPath.moveTo(labelLeft,YPoints.get(i).y);
-                    netPath.lineTo(labelRight,YPoints.get(i).y);
-                    canvas.drawPath(netPath,chartNetPaint);
+                    netPath.moveTo(labelLeft, YPoints.get(i).y);
+                    netPath.lineTo(labelRight, YPoints.get(i).y);
+                    canvas.drawPath(netPath, chartNetPaint);
+                }
+            }
+        }
+
+        // draw link
+        if (chartDataLink1 != null && chartDataLink2 != null) {
+            int linkCount = chartDataLink1.points.size() > chartDataLink2.points.size() ?
+                    chartDataLink1.points.size() : chartDataLink2.points.size();
+            for (int i = 0; i < linkCount; i++) {
+                if (chartDataLink1.points.get(i).x == chartDataLink2.points.get(i).x) {
+                    drawLink(i, linkPaint, canvas);
                 }
             }
         }
 
         // draw data
-        if(datas != null){
+        if (datas != null) {
             int i = 0;
-            while(null != datas.get(i)) {
-                datas.get(i).initProperty(this);
+            while (null != datas.get(i)) {
                 datas.get(i).drawSelf(canvas);
                 ++i;
             }
         }
-
         canvas.restore();
     }
 
-    private int getColor(int i ,int[] colors) {
+    private void drawLink(int i, Paint paint, Canvas canvas) {
+        final int sX = chartDataLink1.points.get(i).x;
+        final int sY = chartDataLink1.points.get(i).y;
+        final int eY = chartDataLink2.points.get(i).y;
+        final int[] colors = {chartDataLink1.initEntityColor(i), chartDataLink2.initEntityColor(i)};
+        LinearGradient linearGradient = new LinearGradient(sX, sY, sX, eY
+                , colors, null, Shader.TileMode.MIRROR);
+        paint.setShader(linearGradient);
+        canvas.drawLine(sX, sY, sX, eY, linkPaint);
+        System.gc();
+    }
+
+    private int getColor(int i, int[] colors) {
         if (i >= colors.length) {
-           return colors[colors.length - 1];
+            return colors[colors.length - 1];
         } else {
             return colors[i];
         }
@@ -339,10 +450,10 @@ public class MyChartView extends View {
     }
 
     /**
-     * @param end   最终数字
-     * @param step  步长
+     * @param end  最终数字
+     * @param step 步长
      */
-    public void setXAxisLabel(int end, int step) {
+    public void setXAxisLabel(int end, int step, String frontUnit, String behindUnit) {
         int start = 0;
         if (start > end) {
             return;
@@ -358,14 +469,16 @@ public class MyChartView extends View {
             tempCursor = tempCursor + step;
             ++i;
         }
-        labelvalueWidth = XAxisLabel.valueAt(XAxisLabel.size()-1)-start;
+        labelvalueWidth = XAxisLabel.valueAt(XAxisLabel.size() - 1) - start;
+        this.XFrontUnit = frontUnit == null ? "" : frontUnit;
+        this.XBehindUnit = behindUnit == null ? "" : behindUnit;
     }
 
     /**
-     * @param end   最终数字
-     * @param step  步长
+     * @param end  最终数字
+     * @param step 步长
      */
-    public void setYAxisLabel(float end, float step) {
+    public void setYAxisLabel(float end, float step, String frontUnit, String behindUnit) {
         float start = 0;
         if (start > end) {
             return;
@@ -381,7 +494,9 @@ public class MyChartView extends View {
             tempCursor = tempCursor + step;
             ++i;
         }
-        labelValueHeight = YAxisLabel.valueAt(YAxisLabel.size()-1)-start;
+        labelValueHeight = YAxisLabel.valueAt(YAxisLabel.size() - 1) - start;
+        this.YFrontUnit = frontUnit == null ? "" : frontUnit;
+        this.YBehindUnit = behindUnit == null ? "" : behindUnit;
     }
 
     public boolean isYAxisNet() {
@@ -404,7 +519,7 @@ public class MyChartView extends View {
         datas.put(++dataCount, chartData);
     }
 
-    public void remmoveData(int i ) {
+    public void remmoveData(int i) {
         datas.removeAt(i);
         dataCount--;
     }
@@ -445,18 +560,19 @@ public class MyChartView extends View {
         this.showXAxisFirst = showXAxisFirst;
     }
 
-    private float getRawSize(int unit, float value) {
+    public float getRawSize(int unit, float value) {
         DisplayMetrics displayMetrics = getContext().getResources().getDisplayMetrics();
         return TypedValue.applyDimension(unit, value, displayMetrics);
     }
 
-    private void reDraw() {
+    public void reDraw() {
         if (Build.VERSION.SDK_INT > 15) {
             postInvalidateOnAnimation();
         } else {
             postInvalidate();
         }
     }
+
 
     public int getLeftOffSet() {
         return leftOffSet;
@@ -522,6 +638,34 @@ public class MyChartView extends View {
         return unitY;
     }
 
+    /**
+     * 设置x轴小数点保留位数
+     *
+     * @param XRetainCount
+     */
+    public void setXRetainCount(int XRetainCount) {
+        this.XRetainCount = XRetainCount;
+    }
+
+    /**
+     * 设置y轴小数点保留位数
+     *
+     * @param YRetaincount
+     */
+    public void setYRetaincount(int YRetaincount) {
+        this.YRetainCount = YRetaincount;
+    }
+
+    /**
+     * 将两组数据连接起来
+     *
+     * @param name1
+     * @param name2
+     */
+    public void linkTwoData(String name1, String name2) {
+        this.link1 = name1;
+        this.link2 = name2;
+    }
 
 
     /**
@@ -584,12 +728,13 @@ public class MyChartView extends View {
     public interface MyMpChartDataProperty {
         /**
          * 颜色过滤器
+         *
          * @param i
          * @param XValue
          * @param YValue
          * @return
          */
-        int getColorFilter(int i,float XValue,float YValue);
+        int getColorFilter(int i, float XValue, float YValue);
     }
 
 }

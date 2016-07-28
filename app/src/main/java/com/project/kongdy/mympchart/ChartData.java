@@ -1,45 +1,66 @@
 package com.project.kongdy.mympchart;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PathMeasure;
 import android.graphics.Point;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.SparseArray;
-
+import android.util.TypedValue;
+import android.view.View;
 
 /**
  * @author kongdy
  *         on 2016/7/27
  * 单组chart数据
  */
-public class ChartData {
+public class ChartData implements ValueAnimator.AnimatorUpdateListener {
 
     public CharSequence name;
 
     public SparseArray<Float> values;
 
-    private SparseArray<Point> points;
+    public SparseArray<Point> points;
 
     private Path foldPath; // 折线
     private Paint foldPaint; // 折线画笔
     private Paint entityPaint; // 实体画笔
     private TextPaint markTextPaint; // 图中数字标注画笔
 
+
+    private float[] mLineBuffer = new float[4]; //
+
     private int foldColor = Color.GREEN;
     private int circleRadius = -1;
     private int foldWidth = 5;
     private float markTextSize = -1;
 
-    private boolean isShowMark;
+    private final long DEFAULT_ANIMAL_TIME = 2000;
+
+    private boolean isShowMark = true; // 是否显示标注
+    public boolean openUpAnimal = true; // 开启上升动画
+    public boolean openfoldAnimal = true; // 开启展开动画
+
+    private PathMeasure animalPathMeasure;
+    private float[] animalPos = new float[2];
+    private Path animalPath;
+    private float pathAllLength;
+    private float currentAnimalPathLength;
+
+    private Matrix mMatrixValueToPx;
+    private Matrix mMatrixOffset;
 
     private MyChartView.MyMpChartDataProperty myMpChartDataProperty;
-
     private MyChartView chartView;
 
+    // from parent
     private SparseArray<Point> XPoints;
     private SparseArray<Point> YPoints;
     private int leftOffSet;
@@ -66,7 +87,6 @@ public class ChartData {
         this.values = values;
         this.name = name;
         this.myMpChartDataProperty = myMpChartDataProperty;
-
         init();
     }
 
@@ -75,8 +95,10 @@ public class ChartData {
         entityPaint = new Paint();
         markTextPaint = new TextPaint();
         foldPath = new Path();
+        animalPath = new Path();
 
         entityPaint.setColor(Color.RED);
+
 
         points = new SparseArray<>();
     }
@@ -100,6 +122,7 @@ public class ChartData {
         YAxisLabel = chartView.getYAxisLabel();
         leftBottomCornerShow = chartView.isLeftBottomCornerShow();
         showHalo = chartView.isOpenHalo();
+        chartView.setLayerType(View.LAYER_TYPE_SOFTWARE,entityPaint);
 
         chartView.openHighQuality(foldPaint);
         chartView.openHighQuality(entityPaint);
@@ -126,14 +149,15 @@ public class ChartData {
         if(markTextSize == -1)
             markTextSize = (XAxisDistance>YAxisDistance?YAxisDistance:XAxisDistance)/20;
 
+      //  openHalo();
         foldPaint.setColor(foldColor);
         foldPaint.setStyle(Paint.Style.STROKE);
         foldPaint.setStrokeWidth(foldWidth);
-        markTextPaint.setColor(Color.BLACK);
+
         markTextPaint.setTextSize(markTextSize);
 
         if(circleRadius == -1)
-            circleRadius = 10;
+            circleRadius = (int) chartView.getRawSize(TypedValue.COMPLEX_UNIT_DIP,4);
         switch (pointStyle) {
             case FILL_DOT:
                 break;
@@ -146,20 +170,8 @@ public class ChartData {
             case NONE_DOT:
                 break;
         }
-    }
 
-    private void openHalo() {
-        if(showHalo) {
-            BlurMaskFilter blurMaskFilter = new BlurMaskFilter(50, BlurMaskFilter.Blur.SOLID);
-            entityPaint.setMaskFilter(blurMaskFilter);
-        }
-    }
-
-    private void closeHalo() {
-        entityPaint.setMaskFilter(null);
-    }
-
-    public void drawSelf(Canvas canvas) {
+        // calculate path
         foldPath.reset();
         int i = 0;
         while(null != points.get(i)) {
@@ -172,47 +184,156 @@ public class ChartData {
                         foldPath.lineTo(point.x,point.y);
                     break;
                 case FOLD_LINE_ROUND:
+                    if(i == 0)
+                        foldPath.moveTo(point.x,point.y);
+                    else
+                        foldPath.quadTo(point.x,point.y,point.x,point.y);
                     break;
                 case COLUMNAR:
                     break;
             }
-            canvas.drawPath(foldPath,foldPaint);
+          //  canvas.drawPath(foldPath,transparentPaint);
             ++i;
         }
+        mMatrixValueToPx = new Matrix();
+        mMatrixOffset = new Matrix();
+        foldPath.transform(mMatrixValueToPx);
+        foldPath.transform(mMatrixOffset);
+
+
+//        animalPathMeasure = new PathMeasure();
+//        animalPathMeasure.setPath(foldPath,false);
+//        pathAllLength = animalPathMeasure.getLength();
+//        animalPath.moveTo(points.get(0).x,points.get(0).y);
+    }
+
+    private void openHalo() {
+        if(showHalo) {
+            BlurMaskFilter blurMaskFilter = new BlurMaskFilter(50, BlurMaskFilter.Blur.SOLID);
+            entityPaint.setMaskFilter(blurMaskFilter);
+        }
+
+    }
+
+    private void closeHalo() {
+        entityPaint.setMaskFilter(null);
+    }
+
+    public void drawSelf(Canvas canvas) {
+        // draw fold
+//        foldPath.reset();
+        int i = 0;
+        while(null != points.get(i+1)) {
+            Point point = points.get(i);
+//            switch (dataStyle) {
+//                case FOLD_LINE_BEVEL:
+//                    if(i == 0)
+//                        foldPath.moveTo(point.x,point.y);
+//                    else
+//                        foldPath.lineTo(point.x,point.y);
+//                    break;
+//                case FOLD_LINE_ROUND:
+//                    if(i == 0)
+//                        foldPath.moveTo(point.x,point.y);
+//                    else
+//                        foldPath.quadTo(point.x,point.y,point.x,point.y);
+//                    break;
+//                case COLUMNAR:
+//                    break;
+//            }
+            //canvas.drawPath(foldPath,foldPaint);
+            mLineBuffer = new float[2*4];
+            mLineBuffer[0] = point.x;
+            mLineBuffer[1] = point.y*currentAnimalPathLength;
+            point = points.get(i+1);
+            mLineBuffer[2] = point.x;
+            mLineBuffer[3] = point.y*currentAnimalPathLength;
+            mMatrixValueToPx.mapPoints(mLineBuffer);
+            mMatrixOffset.mapPoints(mLineBuffer);
+            canvas.drawLines(mLineBuffer, 0, 2 * 2, foldPaint);
+            ++i;
+        }
+        // draw animal path
+//        animalPathMeasure.getPosTan(currentAnimalPathLength,animalPos,null);
+//        animalPath.lineTo(animalPos[0],animalPos[1]);
+//        canvas.translate(currentAnimalPathLength,0);
+//        canvas.drawPath(foldPath,foldPaint);
+
+
+        // draw dot
         i = 0;
         while(null != points.get(i)) {
             Point point = points.get(i);
-            if(pointStyle == MyChartView.POINT_STYLE.HOLLOW_IN_DOT || pointStyle == MyChartView.POINT_STYLE.HOLLOW_OUT_DOT) {
-                int innerRadius = 0;
-                int externalRadius = 0;
-                if(pointStyle == MyChartView.POINT_STYLE.HOLLOW_IN_DOT) {
-                    innerRadius = circleRadius;
-                    externalRadius = circleRadius*3/4;
-                } else {
-                    externalRadius = circleRadius;
-                    innerRadius = circleRadius*3/4;
-                }
-                entityPaint.setColor(Color.WHITE);
-                canvas.drawCircle(point.x, point.y, innerRadius, entityPaint);
-                if (myMpChartDataProperty != null) {
-                    entityPaint.setColor(myMpChartDataProperty.getColorFilter(i, values.keyAt(i), values.valueAt(i)));
-                } else {
-                    entityPaint.setColor(Color.BLACK);
-                }
-                openHalo();
-                canvas.drawCircle(point.x, point.y,externalRadius, entityPaint);
-                closeHalo();
-            }
-
-            String text = values.valueAt(i) + "";
-            if (!TextUtils.isEmpty(text) && !"null".equals(text)) {
-                canvas.drawText(text, point.x + 20, point.y + 20, markTextPaint);
-            } else {
-                canvas.drawText("0", point.x + 20, point.y + 20, markTextPaint);
+            switch (pointStyle) {
+                case FILL_DOT:
+                    initEntityColor(i,entityPaint);
+                    canvas.drawCircle(point.x, point.y,circleRadius, entityPaint);
+                    break;
+                case HOLLOW_IN_DOT:
+                    entityPaint.setColor(Color.WHITE);
+                    canvas.drawCircle(point.x, point.y, circleRadius, entityPaint);
+                    initEntityColor(i,entityPaint);
+                    canvas.drawCircle(point.x, point.y,circleRadius*3/5, entityPaint);
+                    break;
+                case HOLLOW_OUT_DOT:
+                    initEntityColor(i,entityPaint);
+                    canvas.drawCircle(point.x, point.y, circleRadius, entityPaint);
+                    entityPaint.setColor(Color.WHITE);
+                    canvas.drawCircle(point.x, point.y,circleRadius*3/5, entityPaint);
+                    break;
+                case SQUARE_DOT:
+                    initEntityColor(i,entityPaint);
+                    canvas.drawCircle(point.x, point.y,circleRadius, entityPaint);
+                    canvas.drawRect(point.x-circleRadius,point.y-circleRadius,point.x+circleRadius,
+                            point.y+circleRadius,entityPaint);
+                    break;
+                case NONE_DOT:
+                    break;
             }
             ++i;
         }
 
+        // draw mark
+        i = 0;
+        while(null != points.get(i) && isShowMark) {
+            Point point = points.get(i);
+            canvas.drawText(safeIntText(values.valueAt(i) + ""), point.x + 20, point.y + 20, markTextPaint);
+            ++i;
+        }
+    }
+
+    private String safeIntText(String text) {
+        if (!TextUtils.isEmpty(text) && !"null".equals(text)) {
+           return text;
+        } else {
+            return "0";
+        }
+    }
+
+    public void initEntityColor(int i,Paint paint) {
+        if (myMpChartDataProperty != null) {
+            paint.setColor(myMpChartDataProperty.getColorFilter(i, values.keyAt(i), values.valueAt(i)));
+        } else {
+            paint.setColor(Color.BLACK);
+        }
+    }
+
+    public int initEntityColor(int i) {
+        if (myMpChartDataProperty != null) {
+            return myMpChartDataProperty.getColorFilter(i, values.keyAt(i), values.valueAt(i));
+        } else {
+            return Color.BLACK;
+        }
+    }
+
+    public void startOpenFoldAnimal() {
+        if(openUpAnimal) {
+            ObjectAnimator valueAnimator = ObjectAnimator.ofFloat(chartView,"a",0f,1f);
+            valueAnimator.addUpdateListener(this);
+            valueAnimator.setDuration(DEFAULT_ANIMAL_TIME);
+            valueAnimator.setStartDelay(100);
+            valueAnimator.start();
+        }
     }
 
     public void setDataStyle(MyChartView.DATA_STYLE dataStyle) {
@@ -241,5 +362,27 @@ public class ChartData {
 
     public void setMarkTextSize(float markTextSize) {
         this.markTextSize = markTextSize;
+    }
+
+    public MyChartView.MyMpChartDataProperty getMyMpChartDataProperty() {
+        return myMpChartDataProperty;
+    }
+
+    public void setMarkColor(int color) {
+        markTextPaint.setColor(color);
+    }
+
+    public void setOpenUpAnimal(boolean openUpAnimal) {
+        this.openUpAnimal = openUpAnimal;
+    }
+
+    public void setOpenfoldAnimal(boolean openfoldAnimal) {
+        this.openfoldAnimal = openfoldAnimal;
+    }
+
+    @Override
+    public void onAnimationUpdate(ValueAnimator valueAnimator) {
+        currentAnimalPathLength = (float) valueAnimator.getAnimatedValue();
+        chartView.reDraw();
     }
 }
