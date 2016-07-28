@@ -86,5 +86,6 @@ public class MainActivity extends AppCompatActivity {
        // chart1.addChartData(chartData2);
         //chart1.addChartData(chartData3);
       //  chart1.linkTwoData("data2","data3");
+        chart1.animalX(5500);
     }
 }

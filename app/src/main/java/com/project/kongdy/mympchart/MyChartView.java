@@ -1,5 +1,7 @@
 package com.project.kongdy.mympchart;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -16,7 +18,6 @@ import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.SparseArray;
 import android.util.TypedValue;
-import android.view.SurfaceHolder;
 import android.view.View;
 
 import com.google.gson.annotations.SerializedName;
@@ -28,7 +29,7 @@ import java.text.DecimalFormat;
  *         on 2016/7/26
  *         统计图表主体部分
  */
-public class MyChartView extends View {
+public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateListener {
 
     private Paint defaultPaint;
     private Paint XAxisPaint;
@@ -40,7 +41,6 @@ public class MyChartView extends View {
 
     private Path netPath;
 
-    private boolean isHighQuality = true;// 高画质
     private boolean openHalo = true;
     private boolean XAxisNet;
     private boolean YAxisNet;
@@ -72,6 +72,11 @@ public class MyChartView extends View {
     private int unitX;
     private int unitY;
 
+    private float phaseX;
+    private float phaseY;
+
+    private ChartAnimator animator;
+
     private SparseArray<Float> XAxisLabel;
     private SparseArray<Float> YAxisLabel;
     private SparseArray<Point> XPoints;
@@ -86,10 +91,6 @@ public class MyChartView extends View {
     private StringBuilder YAxisFormat;
 
     private SparseArray<ChartData> datas;
-
-    private SurfaceHolder sfh;
-
-    private boolean refreshFlag;
 
     /**
      * 用于产生多个数据之间的连接条
@@ -115,6 +116,7 @@ public class MyChartView extends View {
     }
 
     private void init() {
+
         defaultPaint = new Paint();
         XAxisPaint = new Paint();
         YAxisPaint = new Paint();
@@ -129,6 +131,8 @@ public class MyChartView extends View {
         YPoints = new SparseArray<>();
         datas = new SparseArray<>();
 
+        animator = new ChartAnimator(this);
+
     }
 
     private void initProperty() {
@@ -139,15 +143,15 @@ public class MyChartView extends View {
             chartNetPaint.setStrokeWidth(getRawSize(TypedValue.COMPLEX_UNIT_DIP, 0.5f));
             netPath = new Path();
         }
-        if (isHighQuality) {
-            openHighQuality(defaultPaint);
-            openHighQuality(XAxisPaint);
-            openHighQuality(YAxisPaint);
-            openHighQuality(chartNetPaint);
-            openHighQuality(XAxisMarkPaint);
-            openHighQuality(YAxisMarkPaint);
-            openHighQuality(linkPaint);
-        }
+
+        openHighQuality(defaultPaint);
+        openHighQuality(XAxisPaint);
+        openHighQuality(YAxisPaint);
+        openHighQuality(chartNetPaint);
+        openHighQuality(XAxisMarkPaint);
+        openHighQuality(YAxisMarkPaint);
+        openHighQuality(linkPaint);
+
         XAxisPaint.setStrokeWidth(getXAxisWidth());
         YAxisPaint.setStrokeWidth(getYAxisWidth());
 
@@ -216,21 +220,6 @@ public class MyChartView extends View {
         calculateCoords();
     }
 
-
-    /**
-     * 执行动画
-     */
-    private void animalOpen() {
-        if (datas != null) {
-            int i = 0;
-            while (null != datas.get(i)) {
-                datas.get(i).startOpenFoldAnimal();
-                ++i;
-            }
-        }
-    }
-
-
     private void calculateCoords() {
         XPoints.clear();
         YPoints.clear();
@@ -275,7 +264,6 @@ public class MyChartView extends View {
 
         // check data link
         initLink();
-        animalOpen();
     }
 
     private String getFormatLabel(StringBuilder format, float text) {
@@ -389,12 +377,20 @@ public class MyChartView extends View {
         }
     }
 
-    public boolean isHighQuality() {
-        return isHighQuality;
+    public ChartAnimator getAnimator() {
+        return animator;
     }
 
-    public void setHighQuality(boolean highQuality) {
-        isHighQuality = highQuality;
+    public void animalX(long time) {
+        animator.animalX(time);
+    }
+
+    public void animalY(long time){
+        animator.animalY(time);
+    }
+
+    public void animalXY(long time) {
+        animator.animalXY(time);
     }
 
     public boolean isOpenHalo() {
@@ -665,6 +661,11 @@ public class MyChartView extends View {
     public void linkTwoData(String name1, String name2) {
         this.link1 = name1;
         this.link2 = name2;
+    }
+
+    @Override
+    public void onAnimationUpdate(ValueAnimator animation) {
+        reDraw();
     }
 
 

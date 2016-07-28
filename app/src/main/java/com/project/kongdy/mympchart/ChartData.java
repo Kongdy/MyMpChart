@@ -21,7 +21,7 @@ import android.view.View;
  *         on 2016/7/27
  * 单组chart数据
  */
-public class ChartData implements ValueAnimator.AnimatorUpdateListener {
+public class ChartData {
 
     public CharSequence name;
 
@@ -52,7 +52,6 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
     private float[] animalPos = new float[2];
     private Path animalPath;
     private float pathAllLength;
-    private float currentAnimalPathLength;
 
     private Matrix mMatrixValueToPx;
     private Matrix mMatrixOffset;
@@ -78,6 +77,7 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
     private SparseArray<Float> YAxisLabel;
     private boolean leftBottomCornerShow;
     private boolean showHalo;
+    private ChartAnimator animator;
 
     private MyChartView.DATA_STYLE dataStyle = MyChartView.DATA_STYLE.FOLD_LINE_BEVEL;
     private MyChartView.POINT_STYLE pointStyle = MyChartView.POINT_STYLE.HOLLOW_IN_DOT;
@@ -122,6 +122,7 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
         YAxisLabel = chartView.getYAxisLabel();
         leftBottomCornerShow = chartView.isLeftBottomCornerShow();
         showHalo = chartView.isOpenHalo();
+        animator = chartView.getAnimator();
         chartView.setLayerType(View.LAYER_TYPE_SOFTWARE,entityPaint);
 
         chartView.openHighQuality(foldPaint);
@@ -242,14 +243,16 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
 //                    break;
 //            }
             //canvas.drawPath(foldPath,foldPaint);
+
+
             mLineBuffer = new float[2*4];
             mLineBuffer[0] = point.x;
-            mLineBuffer[1] = point.y*currentAnimalPathLength;
+            mLineBuffer[1] = point.y*animator.getPhaseY();
             point = points.get(i+1);
             mLineBuffer[2] = point.x;
-            mLineBuffer[3] = point.y*currentAnimalPathLength;
-            mMatrixValueToPx.mapPoints(mLineBuffer);
-            mMatrixOffset.mapPoints(mLineBuffer);
+            mLineBuffer[3] = point.y*animator.getPhaseY();
+//            mMatrixValueToPx.mapPoints(mLineBuffer);
+//            mMatrixOffset.mapPoints(mLineBuffer);
             canvas.drawLines(mLineBuffer, 0, 2 * 2, foldPaint);
             ++i;
         }
@@ -326,15 +329,6 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
         }
     }
 
-    public void startOpenFoldAnimal() {
-        if(openUpAnimal) {
-            ObjectAnimator valueAnimator = ObjectAnimator.ofFloat(chartView,"a",0f,1f);
-            valueAnimator.addUpdateListener(this);
-            valueAnimator.setDuration(DEFAULT_ANIMAL_TIME);
-            valueAnimator.setStartDelay(100);
-            valueAnimator.start();
-        }
-    }
 
     public void setDataStyle(MyChartView.DATA_STYLE dataStyle) {
         this.dataStyle = dataStyle;
@@ -380,9 +374,4 @@ public class ChartData implements ValueAnimator.AnimatorUpdateListener {
         this.openfoldAnimal = openfoldAnimal;
     }
 
-    @Override
-    public void onAnimationUpdate(ValueAnimator valueAnimator) {
-        currentAnimalPathLength = (float) valueAnimator.getAnimatedValue();
-        chartView.reDraw();
-    }
 }
