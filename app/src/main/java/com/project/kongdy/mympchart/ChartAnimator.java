@@ -1,5 +1,6 @@
 package com.project.kongdy.mympchart;
 
+import android.animation.Animator;
 import android.animation.ObjectAnimator;
 
 /**
@@ -14,9 +15,7 @@ public class ChartAnimator {
     protected float mPhaseX = 1f;
     protected float mPhaseY = 1f;
 
-
-    public ChartAnimator() {
-    }
+    private ObjectAnimator.AnimatorListener animatorListener;
 
     public ChartAnimator(ObjectAnimator.AnimatorUpdateListener mListener) {
         this.mListener = mListener;
@@ -30,6 +29,8 @@ public class ChartAnimator {
         ObjectAnimator objectAnimator1 = ObjectAnimator.ofFloat(this,"phaseX",0f,1f);
         objectAnimator1.setDuration(duration);
         objectAnimator1.addUpdateListener(mListener);
+        if(animatorListener != null)
+            objectAnimator1.addListener(animatorListener);
         objectAnimator1.start();
     }
 
@@ -41,6 +42,8 @@ public class ChartAnimator {
         ObjectAnimator objectAnimator1 = ObjectAnimator.ofFloat(this,"phaseY",0f,1f);
         objectAnimator1.setDuration(duration);
         objectAnimator1.addUpdateListener(mListener);
+        if(animatorListener != null)
+            objectAnimator1.addListener(animatorListener);
         objectAnimator1.start();
     }
 
@@ -56,7 +59,10 @@ public class ChartAnimator {
         ObjectAnimator objectAnimator2 = ObjectAnimator.ofFloat(this,"phaseY",0f,1f);
         objectAnimator2.setDuration(duration);
         objectAnimator2.addUpdateListener(mListener);
-
+        if(animatorListener != null) {
+            objectAnimator1.addListener(animatorListener);
+            objectAnimator2.addListener(animatorListener);
+        }
         objectAnimator1.start();
         objectAnimator2.start();
     }
@@ -75,5 +81,9 @@ public class ChartAnimator {
 
     public void setPhaseY(float phaseY) {
         this.mPhaseY = phaseY;
+    }
+
+    public void setAnimatorListener(ObjectAnimator.AnimatorListener animatorListener) {
+        this.animatorListener = animatorListener;
     }
 }

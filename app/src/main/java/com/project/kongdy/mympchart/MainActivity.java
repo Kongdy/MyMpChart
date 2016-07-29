@@ -9,6 +9,7 @@ import android.util.SparseArray;
 public class MainActivity extends AppCompatActivity {
 
     private MyChartView chart1;
+    private MyChartView chart2;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -16,6 +17,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         chart1 = (MyChartView) findViewById(R.id.chart1);
+        chart2 = (MyChartView) findViewById(R.id.chart2);
 
         // style1
 //        chart1.setXAxisColors(new int[]{Color.RED,Color.BLUE,
@@ -83,9 +85,38 @@ public class MainActivity extends AppCompatActivity {
         chartData3.setPointStyle(MyChartView.POINT_STYLE.FILL_DOT);
         chartData3.setFoldColor(Color.TRANSPARENT);
         chart1.addChartData(chartData1);
-       // chart1.addChartData(chartData2);
-        //chart1.addChartData(chartData3);
-      //  chart1.linkTwoData("data2","data3");
-        chart1.animalX(5500);
+        chart1.addChartData(chartData2);
+        chart1.addChartData(chartData3);
+        chart1.linkTwoData("data2","data3");
+        chart1.animalXY(2500);
+
+        // style2
+        chart2.setXAxisNet(false);
+        chart2.setYAxisNet(true);
+        chart2.setXAxisLabel(7,1,"4-",null);
+        chart2.setYAxisLabel(10,5,null,null);
+        chart2.setYAxisColors(new int[]{Color.rgb(107,202,220),Color.rgb(157,222,106),Color.rgb(254,145,147)});
+        chart2.setLeftBottomCornerShow(true);
+        chart2.setYAxisWidth(20);
+        SparseArray<Float> data4 = new SparseArray<>();
+        data4.put(1,4.8f);
+        data4.put(2,9.1f);
+        data4.put(3,8.6f);
+        data4.put(4,13.2f);
+        data4.put(5,6.5f);
+        data4.put(6,7.8f);
+        data4.put(7,12.6f);
+        ChartData chartData4 = new ChartData(data4, "data4", new MyChartView.MyMpChartDataProperty() {
+            @Override
+            public int getColorFilter(int i, float XValue, float YValue) {
+                if(YValue < 5 || YValue > 10) {
+                    return Color.GRAY;
+                }
+                return Color.rgb(157,222,106);
+            }
+        });
+        chartData4.setDataStyle(MyChartView.DATA_STYLE.COLUMNAR);
+        chart2.addChartData(chartData4);
+        chart2.animalXY(2500);
     }
 }

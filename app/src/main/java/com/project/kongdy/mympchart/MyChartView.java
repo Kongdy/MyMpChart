@@ -72,9 +72,6 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
     private int unitX;
     private int unitY;
 
-    private float phaseX;
-    private float phaseY;
-
     private ChartAnimator animator;
 
     private SparseArray<Float> XAxisLabel;
@@ -308,7 +305,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
             }
             if (i != 0 && i != XPoints.size() - 1) {
                 if (XAxisNet) {
-                    netPath.reset();
+                    netPath.rewind();
                     netPath.moveTo(XPoints.get(i).x, XPoints.get(i).y);
                     netPath.lineTo(XPoints.get(i).x, labelTop);
                     canvas.drawPath(netPath, chartNetPaint);
@@ -327,7 +324,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
             }
             if (i != 0 && i != YPoints.size() - 1) {
                 if (YAxisNet) {
-                    netPath.reset();
+                    netPath.rewind();
                     netPath.moveTo(labelLeft, YPoints.get(i).y);
                     netPath.lineTo(labelRight, YPoints.get(i).y);
                     canvas.drawPath(netPath, chartNetPaint);
@@ -337,10 +334,10 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
 
         // draw link
         if (chartDataLink1 != null && chartDataLink2 != null) {
-            int linkCount = chartDataLink1.points.size() > chartDataLink2.points.size() ?
-                    chartDataLink1.points.size() : chartDataLink2.points.size();
+            int linkCount = chartDataLink1.getTruthCount() > chartDataLink2.getTruthCount() ?
+                    chartDataLink1.getTruthCount() : chartDataLink2.getTruthCount();
             for (int i = 0; i < linkCount; i++) {
-                if (chartDataLink1.points.get(i).x == chartDataLink2.points.get(i).x) {
+                if (chartDataLink1.mPointsBuffer.get(i).x == chartDataLink2.mPointsBuffer.get(i).x) {
                     drawLink(i, linkPaint, canvas);
                 }
             }
@@ -358,15 +355,14 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
     }
 
     private void drawLink(int i, Paint paint, Canvas canvas) {
-        final int sX = chartDataLink1.points.get(i).x;
-        final int sY = chartDataLink1.points.get(i).y;
-        final int eY = chartDataLink2.points.get(i).y;
+        final int sX = chartDataLink1.mPointsBuffer.get(i).x;
+        final int sY = (int) chartDataLink1.getBufferY(i);
+        final int eY = (int) chartDataLink2.getBufferY(i);
         final int[] colors = {chartDataLink1.initEntityColor(i), chartDataLink2.initEntityColor(i)};
         LinearGradient linearGradient = new LinearGradient(sX, sY, sX, eY
                 , colors, null, Shader.TileMode.MIRROR);
         paint.setShader(linearGradient);
         canvas.drawLine(sX, sY, sX, eY, linkPaint);
-        System.gc();
     }
 
     private int getColor(int i, int[] colors) {
