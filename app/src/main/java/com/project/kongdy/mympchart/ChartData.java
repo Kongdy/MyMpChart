@@ -1,20 +1,18 @@
 package com.project.kongdy.mympchart;
 
-import android.animation.ObjectAnimator;
-import android.animation.ValueAnimator;
+
 import android.graphics.BlurMaskFilter;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.PathMeasure;
 import android.graphics.Point;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.View;
+
+import java.util.HashMap;
 
 /**
  * @author kongdy
@@ -26,6 +24,9 @@ public class ChartData {
     public CharSequence name;
 
     public SparseArray<Float> values;
+
+    public long[] timeX;
+    public float[] timeY;
 
     public SparseArray<Point> mPointsBuffer;
 
@@ -68,10 +69,21 @@ public class ChartData {
     private boolean leftBottomCornerShow;
     private boolean showHalo;
     private ChartAnimator animator;
+    private boolean showTimeLabel;
+    private SparseArray<Long> XAxisLabelLong;
+    private long labelValueWidthLong;
 
     private MyChartView.DATA_STYLE dataStyle = MyChartView.DATA_STYLE.FOLD_LINE_BEVEL;
     private MyChartView.POINT_STYLE pointStyle = MyChartView.POINT_STYLE.HOLLOW_IN_DOT;
 
+
+    public ChartData(long[] timeX,float[] timeY, CharSequence name, MyChartView.MyMpChartDataProperty myMpChartDataProperty) {
+        this.timeX = timeX;
+        this.timeY = timeY;
+        this.name = name;
+        this.myMpChartDataProperty = myMpChartDataProperty;
+        init();
+    }
 
     public ChartData(SparseArray<Float> values, CharSequence name, MyChartView.MyMpChartDataProperty myMpChartDataProperty) {
         this.values = values;
@@ -112,6 +124,9 @@ public class ChartData {
         leftBottomCornerShow = chartView.isLeftBottomCornerShow();
         showHalo = chartView.isOpenHalo();
         animator = chartView.getAnimator();
+        showTimeLabel = chartView.isShowTimeXAxis();
+        XAxisLabelLong = chartView.getXAxisLabelLong();
+        labelValueWidthLong = chartView.getLabelValueWidthLong();
         chartView.setLayerType(View.LAYER_TYPE_SOFTWARE, entityPaint);
 
         chartView.openHighQuality(foldPaint);
@@ -124,25 +139,26 @@ public class ChartData {
 
 
     public void calculateCoords() {
-        if (values == null) {
-            return;
-        }
 
         float YAxisDistance = Math.abs(YPoints.get(0).y - YPoints.get(YPoints.size() - 1).y) - unitY;
         float XAxisDistance = Math.abs(XPoints.get(0).x - XPoints.get(XPoints.size() - 1).x) - unitX;
 
-
         if (leftBottomCornerShow) {
             XAxisDistance = XAxisDistance - leftOffSet;
         }
-        for (int i = 0; i < values.size(); i++) {
+        int count = values == null?timeX.length:values.size();
+        for (int i = 0; i < count; i++) {
             Point point = new Point();
-            point.x = (int) ((values.keyAt(i) / labelvalueWidth) * XAxisDistance + labelLeft);
-            final float valueY = values.valueAt(i);
-            point.y = (int) (YAxisDistance - (valueY / labelValueHeight) * YAxisDistance + labelTop + unitY);
+            if(showTimeLabel) {
+                point.x = (int) ((timeX[i] / labelValueWidthLong) * XAxisDistance + labelLeft);
+                point.y = (int) (YAxisDistance - (timeY[i] / labelValueHeight) * YAxisDistance + labelTop + unitY);
+            } else {
+                final float valueY = values.valueAt(i);
+                point.x = (int) ((values.keyAt(i) / labelvalueWidth) * XAxisDistance + labelLeft);
+                point.y = (int) (YAxisDistance - (valueY / labelValueHeight) * YAxisDistance + labelTop + unitY);
+            }
             mPointsBuffer.put(i, point);
         }
-
 
         if(columnarMinMaxWidth == -1 && dataStyle == MyChartView.DATA_STYLE.COLUMNAR) {
             columnarMinMaxWidth = (YAxisDistance)/(mPointsBuffer.size()*2);
@@ -236,7 +252,8 @@ public class ChartData {
         while (i < getTruthCount() && isShowMark) {
             Point point = mPointsBuffer.get(i);
             float y = revisePosition(point.y);
-            canvas.drawText(safeIntText(values.valueAt(i) + ""), point.x, y - markTextPaint.getTextSize(), markTextPaint);
+            float drawText =  values == null?timeY[i]:values.valueAt(i);
+            canvas.drawText(safeIntText(drawText + ""), point.x, y - markTextPaint.getFontSpacing(), markTextPaint);
             ++i;
         }
     }
@@ -267,16 +284,20 @@ public class ChartData {
     }
 
     public void initEntityColor(int i, Paint paint) {
+        float X = values == null?timeX[i]:values.keyAt(i);
+        float Y = values == null?timeY[i]:values.valueAt(i);
         if (myMpChartDataProperty != null) {
-            paint.setColor(myMpChartDataProperty.getColorFilter(i, values.keyAt(i), values.valueAt(i)));
+            paint.setColor(myMpChartDataProperty.getColorFilter(i,X, Y));
         } else {
             paint.setColor(Color.BLACK);
         }
     }
 
     public int initEntityColor(int i) {
+        float X = values == null?timeX[i]:values.keyAt(i);
+        float Y = values == null?timeY[i]:values.valueAt(i);
         if (myMpChartDataProperty != null) {
-            return myMpChartDataProperty.getColorFilter(i, values.keyAt(i), values.valueAt(i));
+            return myMpChartDataProperty.getColorFilter(i, X, Y);
         } else {
             return Color.BLACK;
         }

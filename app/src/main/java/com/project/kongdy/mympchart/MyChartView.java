@@ -23,6 +23,7 @@ import android.view.View;
 import com.google.gson.annotations.SerializedName;
 
 import java.text.DecimalFormat;
+import java.util.Calendar;
 
 /**
  * @author kongdy
@@ -47,6 +48,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
     private boolean leftBottomCornerShow = false;
     private boolean showXAxisFirst;
     private boolean showYAxisFirst;
+    private boolean showTimeXAxis; // 设置时间X轴
 
     private int[] XAxisColors;
     private int[] YAxisColors;
@@ -59,6 +61,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
 
     private float labelValueHeight;
     private float labelvalueWidth;
+    private long labelValueWidthLong; // 时间轴的长度
 
     private int dataCount = -1;
 
@@ -76,6 +79,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
 
     private SparseArray<Float> XAxisLabel;
     private SparseArray<Float> YAxisLabel;
+    private SparseArray<Long> XAxisLabelLong;
     private SparseArray<Point> XPoints;
     private SparseArray<Point> YPoints;
     private String XFrontUnit;
@@ -220,7 +224,14 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
     private void calculateCoords() {
         XPoints.clear();
         YPoints.clear();
-        unitX = (mWidth - YAxisWidth - leftOffSet - getPaddingLeft() - getPaddingRight()) / (XAxisLabel.size());
+        int Xcount;
+        if(showTimeXAxis) {
+            Xcount = XAxisLabelLong.size();
+        } else {
+            Xcount = XAxisLabel.size();
+        }
+
+        unitX = (mWidth - YAxisWidth - leftOffSet - getPaddingLeft() - getPaddingRight()) / Xcount;
         unitY = (int) ((mHeight - YLabelTextSize - XLabelTextSize - getPaddingTop() - getPaddingBottom() - XAxisWidth)
                 / (YAxisLabel.size()));
         labelTop = (int) (mHeight - unitY * (YAxisLabel.size()) - getPaddingBottom() - XLabelTextSize);
@@ -229,7 +240,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
         labelBottom = (int) (mHeight - XLabelTextSize - getPaddingBottom());
         // X
         int XLeft = labelLeft;
-        for (int i = 0; i <= XAxisLabel.size(); i++) {
+        for (int i = 0; i <= Xcount; i++) {
             Point point = new Point();
             if (leftBottomCornerShow && i == 0) {
                 point.x = XLeft - leftOffSet;
@@ -300,7 +311,12 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
             XAxisPaint.setColor(getColor(i, XColors));
             canvas.drawLine(XPoints.get(i).x, XPoints.get(i).y, XPoints.get(i + 1).x, XPoints.get(i + 1).y, XAxisPaint);
             if (showXAxisFirst || i > 0) {
-                String text = XFrontUnit + getFormatLabel(XAxisFormat, XAxisLabel.get(i)) + XBehindUnit;
+                String text;
+                if(showTimeXAxis) {
+                    text = getDateStr(XAxisLabelLong.get(i));
+                } else {
+                    text =   XFrontUnit + getFormatLabel(XAxisFormat, XAxisLabel.get(i)) + XBehindUnit;
+                }
                 canvas.drawText(text, XPoints.get(i).x, XPoints.get(i).y + XLabelTextSize, XAxisMarkPaint);
             }
             if (i != 0 && i != XPoints.size() - 1) {
@@ -471,6 +487,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
      * @param step 步长
      */
     public void setYAxisLabel(float end, float step, String frontUnit, String behindUnit) {
+        showTimeXAxis = false;
         float start = 0;
         if (start > end) {
             return;
@@ -650,6 +667,47 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
      */
     public void setYRetaincount(int YRetaincount) {
         this.YRetainCount = YRetaincount;
+    }
+
+    /**
+     * 设置时间根据天数来产生坐标的X轴
+     * 该设置会与直接设置X轴产生冲突，
+     * 最终显示结果依据先后顺序，后者会被配置
+     * @param showTimeXAxis 是否显示
+     * @param dayCount 需要显示得天数
+     * @param step 步长
+     */
+    public void setShowTimeXAxis(boolean showTimeXAxis,int dayCount,int step) {
+        this.showTimeXAxis = showTimeXAxis;
+        int i = 0;
+        XAxisLabelLong = new SparseArray<>();
+        while(i < dayCount) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.DAY_OF_MONTH,-i);
+            XAxisLabelLong.put(i/step,calendar.getTimeInMillis());
+            i = i+step;
+        }
+        labelValueWidthLong = XAxisLabelLong.get(XAxisLabelLong.size()-1)-XAxisLabelLong.get(0);
+    }
+
+    public String getDateStr(long time) {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(time);
+        String day = String.valueOf(calendar.get(Calendar.DAY_OF_MONTH));
+        String month = String.valueOf(calendar.get(Calendar.MONTH)+1);
+        return month+"-"+day;
+    }
+
+    public long getLabelValueWidthLong() {
+        return labelValueWidthLong;
+    }
+
+    public boolean isShowTimeXAxis() {
+        return showTimeXAxis;
+    }
+
+    public SparseArray<Long> getXAxisLabelLong() {
+        return XAxisLabelLong;
     }
 
     /**
