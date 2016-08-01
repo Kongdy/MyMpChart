@@ -462,6 +462,7 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
      * @param step 步长
      */
     public void setXAxisLabel(int end, int step, String frontUnit, String behindUnit) {
+        showTimeXAxis = false;
         int start = 0;
         if (start > end) {
             return;
@@ -487,7 +488,6 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
      * @param step 步长
      */
     public void setYAxisLabel(float end, float step, String frontUnit, String behindUnit) {
-        showTimeXAxis = false;
         float start = 0;
         if (start > end) {
             return;
@@ -680,12 +680,14 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
     public void setShowTimeXAxis(boolean showTimeXAxis,int dayCount,int step) {
         this.showTimeXAxis = showTimeXAxis;
         int i = 0;
+        int count = 0;
         XAxisLabelLong = new SparseArray<>();
         while(i < dayCount) {
             Calendar calendar = Calendar.getInstance();
-            calendar.add(Calendar.DAY_OF_MONTH,-i);
-            XAxisLabelLong.put(i/step,calendar.getTimeInMillis());
+            calendar.add(Calendar.DAY_OF_MONTH,i-dayCount);
+            XAxisLabelLong.put(count,calendar.getTimeInMillis());
             i = i+step;
+            ++count;
         }
         labelValueWidthLong = XAxisLabelLong.get(XAxisLabelLong.size()-1)-XAxisLabelLong.get(0);
     }

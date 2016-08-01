@@ -3,7 +3,10 @@ package com.project.kongdy.mympchart;
 import android.graphics.Color;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.util.SparseArray;
+
+import java.util.Calendar;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -91,22 +94,55 @@ public class MainActivity extends AppCompatActivity {
         chart1.animalXY(2500);
 
         // style2
+//        chart2.setXAxisNet(false);
+//        chart2.setYAxisNet(true);
+//        chart2.setXAxisLabel(7,1,"4-",null);
+//        chart2.setYAxisLabel(10,5,null,null);
+//        chart2.setYAxisColors(new int[]{Color.rgb(107,202,220),Color.rgb(157,222,106),Color.rgb(254,145,147)});
+//        chart2.setLeftBottomCornerShow(true);
+//        chart2.setYAxisWidth(20);
+//        SparseArray<Float> data4 = new SparseArray<>();
+//        data4.put(1,4.8f);
+//        data4.put(2,9.1f);
+//        data4.put(3,8.6f);
+//        data4.put(4,13.2f);
+//        data4.put(5,6.5f);
+//        data4.put(6,7.8f);
+//        data4.put(7,12.6f);
+//        ChartData chartData4 = new ChartData(data4, "data4", new MyChartView.MyMpChartDataProperty() {
+//            @Override
+//            public int getColorFilter(int i, float XValue, float YValue) {
+//                if(YValue < 5 || YValue > 10) {
+//                    return Color.GRAY;
+//                }
+//                return Color.rgb(157,222,106);
+//            }
+//        });
+//        chartData4.setDataStyle(MyChartView.DATA_STYLE.COLUMNAR);
+//        chart2.addChartData(chartData4);
+//        chart2.animalXY(2500);
+
+        // 3
         chart2.setXAxisNet(false);
         chart2.setYAxisNet(true);
-        chart2.setXAxisLabel(7,1,"4-",null);
+        chart2.setShowTimeXAxis(true,8,1);
         chart2.setYAxisLabel(10,5,null,null);
         chart2.setYAxisColors(new int[]{Color.rgb(107,202,220),Color.rgb(157,222,106),Color.rgb(254,145,147)});
         chart2.setLeftBottomCornerShow(true);
         chart2.setYAxisWidth(20);
-        SparseArray<Float> data4 = new SparseArray<>();
-        data4.put(1,4.8f);
-        data4.put(2,9.1f);
-        data4.put(3,8.6f);
-        data4.put(4,13.2f);
-        data4.put(5,6.5f);
-        data4.put(6,7.8f);
-        data4.put(7,12.6f);
-        ChartData chartData4 = new ChartData(data4, "data4", new MyChartView.MyMpChartDataProperty() {
+        float[] Ylabels = new float[7];
+        long[] Xlabels = new long[7];
+        for (int i = 0;i < 7;i++) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.add(Calendar.DAY_OF_MONTH,i-7);
+            long time = calendar.getTimeInMillis();
+            float random = (float) Math.random();
+            Log.e("random","random:"+random);
+            Ylabels[i] = random*i*15f;
+            Xlabels[i] = time;
+            Log.e("Ylabels[i]","Ylabels[i]:"+Ylabels[i]);
+        }
+        ChartData chartData5 = new ChartData(Xlabels, Ylabels, "data5", new MyChartView.MyMpChartDataProperty() {
             @Override
             public int getColorFilter(int i, float XValue, float YValue) {
                 if(YValue < 5 || YValue > 10) {
@@ -115,8 +151,8 @@ public class MainActivity extends AppCompatActivity {
                 return Color.rgb(157,222,106);
             }
         });
-        chartData4.setDataStyle(MyChartView.DATA_STYLE.COLUMNAR);
-        chart2.addChartData(chartData4);
+        chartData5.setDataStyle(MyChartView.DATA_STYLE.COLUMNAR);
+        chart2.addChartData(chartData5);
         chart2.animalXY(2500);
     }
 }
