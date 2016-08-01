@@ -166,7 +166,6 @@ public class ChartData {
             BlurMaskFilter blurMaskFilter = new BlurMaskFilter(50, BlurMaskFilter.Blur.SOLID);
             entityPaint.setMaskFilter(blurMaskFilter);
         }
-
     }
 
     private void closeHalo() {

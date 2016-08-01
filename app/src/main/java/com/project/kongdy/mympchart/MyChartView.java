@@ -516,11 +516,15 @@ public class MyChartView extends View implements ObjectAnimator.AnimatorUpdateLi
         dataCount--;
     }
 
-    public SparseArray<ChartData> getChartDatas() {
-        return datas;
+    /**
+     * 直接设定外部设置好的整组数据，如果之前有设定数据，会覆盖原有数据
+     * @param datas
+     */
+    public void setChartDatas(SparseArray<ChartData> datas) {
+        this.datas = datas;
     }
 
-    public SparseArray<ChartData> getDatas() {
+    public SparseArray<ChartData> getChartDatas() {
         return datas;
     }
 
